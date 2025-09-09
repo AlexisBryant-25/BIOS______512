@@ -1,2 +1,2 @@
-BIOS 512 -  Contains al work asnd projects for this classs
+BIOS 512 -  Contains all work and projects for this class
 
