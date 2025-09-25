@@ -1,9 +1,11 @@
 install.packages("tidyverse", dependencies = TRUE)
 install.packages("rmarkdown", dependencies = TRUE)
 install.packages("IRkernel", dependencies = TRUE)
-install.packages("skimr")
-install.packages("shiny")
-install.packages("Rtsne", user = FALSE)
-
-
+install.packages("skimr", dependencies = TRUE)
+install.packages("shiny", dependencies = TRUE)
+install.packages("deSolve", dependencies = TRUE)
+install.packages("Rtsne", dependencies = TRUE)
 IRkernel::installspec(user = FALSE)
+
+system("wget https://github.com/quarto-dev/quarto-cli/releases/download/v2.12.0/quarto-2.12.0-linux-amd64.deb")
+system("sudo dpkg -i quarto-2.12.0-linux-amd64.deb")
