@@ -1,0 +1,173 @@
+---
+title: "Homework05"
+author: "Alexis Bryant"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+  nbconvert::notebook: default
+---
+
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(Rtsne)
+library(rmarkdown)
+```
+
+## 1.1 Question 1
+
+**a) Import your data**
+
+```{r}
+wine <- read_csv("wine.csv")
+
+```
+
+**b) Check out the columns present using one of R's data frame summary.**
+
+```{r}
+library(dplyr)
+glimpse(wine)
+
+```
+
+**c) Get summary statistics on the numeric variables.**
+
+```{r}
+wine %>% select(-class) %>% summary()
+```
+
+## 1.2 Question 2
+
+**a) Scale and Center your data** *Hint:* Use mutate() statement across all columns **except class** with function(x) as.numeric(scale(x)).
+
+```{r}
+wine_scaled <- wine %>% 
+  mutate(across(-class, ~as.numeric(scale(.))))
+```
+
+**b) Based on what you saw in the summary statistic table from the imported data, why would scaling and centering this data be helpful before we perform PCA.**
+
+
+Scaling ensures all variables contribute equally. Without scaling, variables with larger ranges like proline could effect the PCA outcome and hide smaller variables like ash that have a smaller range.
+
+
+## 1.3 Question 3
+
+**a) Perform PCA**
+
+```{r}
+wine_pca <- prcomp(
+  wine_scaled %>%
+    select(-class), center = TRUE, scale. = TRUE
+)
+
+```
+
+**b) How much of the total variance is explained by PC1? PC2? What function do we use to see that information?**
+
+```{r}
+summary(wine_pca)$importance[2, 1:2]
+```
+
+36% of the variance is explained by PC1 and 19% of the variance is explained by PC2. We use the summary function to see this information.
+
+
+**c) Why are we doing PCA first?**
+
+PCA is done first because it compresses the data into a smaller uncorrelated data frame and it removes the redundancy between correlated variables and reduces noise.
+
+
+**d) What is the rotation matrix? Print it explicitly.** *Hint:* Check the notes for a simple way to do this!
+
+```{r}
+print(wine_pca$rotation, digits = 3)
+```
+
+**e) Plot PC1 vs. PC2, using the wine class as labels for coloring.** *Hint:* You'll first need a data set with only PC1 and PC2, then add back the class variable from your scaled data set with a mutate() statement. Then, you can use color = factor(class) in your ggplot statement.
+
+```{r}
+wine_scores <- as_tibble(wine_pca$x) %>%
+  mutate(class = wine_scaled$class)
+
+ggplot(wine_scores, aes(x = PC1, y = PC2, color = factor(class))) +
+  geom_point(size = 3, alpha = 0.7) +
+  labs(title = "Wine Data: PC1 vs PC2",
+       x = "PC1",
+       y = "PC2",
+       color = "Wine Class") +
+  theme_minimal()
+```
+
+**f) What do you see after plotting PC1 vs PC2? What does this mean in context of wine classes?**
+
+The wine classes form distinct clusters. Wine class 1 is more condensed than 2 and 3, with wine class 2 being the most spread out with a few points overlapping in wine class 1. This means that PC1 and PC@ explain enough of the variance to define class structure which could suggest that wines in different classes are chemically distinct.
+
+
+**g) Give an example of data where PCA would fail. You can describe the data or do a simulation.** *Hint:* Our notes have a few examples!
+
+PCA would fail if the data was arranged in a spiral and when the noise has a higher variance than the real pattern.In that example PCA would cause it to overlap, lose its actual structure, and align with the noise instead of the signal
+
+
+Example:
+
+```{r}
+set.seed(1)
+theta <- runif(1000, 0, 2*pi)
+x<-cos(theta)
+y<-sin(theta)
+df<- tibble(x,y)
+ggplot(df, aes(x,y)) + geom_point()
+```
+
+**h) Explain the difference between vector space and manifold, and how these terms apply to what we did/will do with T-SNE.**
+
+
+A vector space is a mathematical structure where vectors are added and scaled by numbers from a field. Its restrictive because every operation has to make sense globally and linearly. PCA works in vector spaces and finds a rotation of the axes and aligns with the directions of maximum variance in the data. A Manifold is a space that can be curved globally but looks like a vector space locally. So, PCA can only work in vector spaces due the the assumption it holds that data can be globally represented as a vector space, which only works if the structure is linear.T-SNE is essentially a manifold method because it does not represent the entire data set with one linear rotation. It it keeps the local environment which unrolls the manifold the data lies on. This is why T-SNE can reveal non-linear structure such as clusters that PCA can't.
+
+
+
+## 1.4 Question 4
+
+**a) Perform T-SNE** set seed = 123. *Hint:* Subset your PCS results to PC1-PC10, add the class variable back in, remove duplicates, then perform T-SNE.
+
+```{r}
+set.seed(123)
+
+pca_subset <- wine_pca$x[, 1:10] %>%
+  as_tibble() %>%
+  mutate(class = wine_scaled$class) %>%
+  distinct()
+
+tsne_results <- Rtsne(as.matrix(pca_subset %>% select(-class)), dims = 2)
+
+tsne_df<- as_tibble(tsne_results$Y) %>%
+  rename(Dim1 = V1, Dim2 = V2) %>%
+  mutate(class = pca_subset$class)
+```
+
+**b) Plot the results in 2D.** *Hint:* Convert your T-SNE results to a tibble and add back the class variable from your scaled data set using a mutate() statement. Then, you can use color = factor(class) in your ggplot statement.
+
+```{r}
+ggplot(tsne_df, aes(x=Dim1, y=Dim2, color = factor(class))) +
+  geom_point(alpha = 0.7) + 
+  labs(title = "T-SNE Results on Wine Data",
+       x = "Dim1",
+       y = "Dim2",
+       color = "Wine Class"
+       )
+```
+
+**c) Why didn't we stop at PCA?**
+
+
+PCA is a linear dimensionality reduction method that captures axes of maximum variance but assumes global linear structure, but not all data sets contain linear relationships. Meaning that PCA can spread the wine classes in rotated spaces but it can really separate them if the class boundaries are curved. But, T-SNE is non-linear and manifold based which allows the clusters to be created naturally, even if they are curved or non-linear. Its best to perform both to get the full picture.
+
+
+**d) What other types of data does this workflow make sense for?**
+
+
+This workflow is useful for high- dimensional data where local neighborhoods matter more than global variance. Examples of this would be biological data, and clinical data. 
+
