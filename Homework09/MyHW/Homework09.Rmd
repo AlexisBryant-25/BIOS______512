@@ -1,0 +1,281 @@
+---
+title: "Homework 09 - Regression and Classification"
+author: "Alexis Bryant"
+date: "2025-11-07"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(caret)
+library(glmnet)
+library(tidyverse)
+```
+
+## Question 1
+
+In the table below, fill in the definition column with a short (no more than two sentence) definition for each vocab word. If it can be summarized by a formula, give the formula.
+
+
+| **Vocab Word** | **Definition** |
+|----------------|----------------|
+| **One-hot coding** | Converts categorical variables into multiple binary indicator columns (e.g., “fuel_type_gas”, “fuel_type_diesel”), allowing categorical data to be used in regression or classification models. |
+| **Feature selection** | Choosing the most informative predictors to improve model accuracy and reduce overfitting. |
+| **Classifier** | An algorithm that predicts categorical outcomes (e.g., diabetic vs. non-diabetic). |
+| **Precision** | TP / (TP + FP); proportion of predicted positives that are actually positive. |
+| **Recall** | TP / (TP + FN); proportion of true positives correctly identified. |
+| **F1 Score** | 2 × (Precision × Recall) / (Precision + Recall); balances precision and recall. |
+| **Parsimonious model** | A simple model that explains data well without unnecessary complexity. |
+| **Ridge regression** | Linear regression with an L2 penalty that shrinks coefficients toward zero (reduces variance). |
+| **LASSO regression** | Linear regression with an L1 penalty that can shrink coefficients to exactly zero (performs feature selection). |
+| **Cross-validation** | Method of evaluating model performance by repeatedly training/testing on different subsets of the data. |
+| **Tree-based methods** | Models that make predictions by splitting data hierarchically (e.g., decision trees, random forests). |
+
+## Question 2
+
+a) What shape does a perfect classifier look like on an ROC curve? What about a bad classifier?
+
+A perfect classifier has an ROC curve that hugs the top-left corner which is when AUC equals 1 so it classifies all the positives and negatives correctly. A bad classifier goes along the diagonal line which is when AUC = 0.5.
+
+b) Think about the formula for an F1 score. What does it mean when the F1 score is close to 1? Close to 0?
+
+\[
+F1 = 2 \times \frac{Precision \times Recall}{Precision + Recall}
+\]
+An F1 close to 1 means both precision and recall are high meaning the classifier is accurate and consistent.  
+An F1 near 0 means one or both are low meaning the model either misses positives or generates too many false alarms.
+
+## Question 3
+
+|  | **Linear Regression** | **Logistic Regression** |
+|-------------|-----------------------|--------------------------|
+| **Chart Shape** | Straight line showing a continuous relationship between predictors and outcome. | S-shaped (sigmoid) curve showing probability between 0 and 1. |
+| **Dependent Variable Type** | Continuous numeric variable (e.g., price, weight, mpg). | Categorical (binary) variable (e.g., yes/no, 0/1). |
+| **Purpose** | Regression — predicts continuous outcomes. | Classification — predicts categorical outcomes. |
+| **Range of Output Variable** | (-∞, ∞) | (0, 1), representing predicted probabilities. |
+| **Method** | Ordinary Least Squares (OLS) — minimizes sum of squared errors. | Maximum Likelihood Estimation (MLE) — finds parameters that maximize likelihood of observed outcomes. |
+| **Example of Use** | Predicting house price from square footage and number of rooms. | Predicting diabetes diagnosis from glucose, BMI, and age. |
+
+## Question 4
+
+Why is it important to train then test our model? How do we do that? (2-3 sentences. Not looking for code, just general explanation).
+
+Its important to train and then test the the model because when the model is fit on the data and then evaluated on the same data it can lead to overfiting due to the model already having "seen" the data.So you train on 75% and test the remaining 25% to check generalization and if the accuracy is good on the test set then the model is also good.
+
+## Question 5
+
+a) First, load the housing.csv data set. Look at the data in some useful way. Why is linear regression appropriate here?
+
+```{r}
+
+library(tidyverse)
+library(caret)  
+
+
+housing <- read_csv("housing.csv")
+
+head(housing)
+summary(housing)
+colSums(is.na(housing))
+
+```
+
+Linear regression is appropriate because the response variable median_house_value is continuous. Predictors like median_income, housing_median_age, and total_rooms are numeric. We assume approximate linear relationships between predictors and the target variable.
+
+b) Scale data and split it 75/25 training/testing. Set seed = 123.
+
+```{r}
+set.seed(123)
+housing <- housing %>% select_if(is.numeric)
+
+train_index <- createDataPartition(housing$median_house_value, p = 0.75, list = FALSE)
+train_data <- housing[train_index, ]
+test_data <- housing[-train_index, ]
+
+preproc <- preProcess(train_data, method = c("center", "scale"))
+train_scaled <- predict(preproc, train_data)
+test_scaled <- predict(preproc, test_data)
+
+```
+
+c) Fit the model.
+
+```{r}
+model <- lm(median_house_value ~ ., data = train_scaled)
+
+summary(model)
+
+```
+
+d) Make predictions on test data and show them in an actual vs. predicted plot.
+
+```{r}
+predictions <- predict(model, newdata = test_scaled)
+
+results <- tibble(
+  Actual = test_scaled$median_house_value,
+  Predicted = predictions
+)
+
+ggplot(results, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.6, color = "blue") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+  labs(
+    title = "Actual vs Predicted Median House Value",
+    x = "Actual Values",
+    y = "Predicted Values"
+  ) +
+  theme_minimal()
+
+```
+The plot shows pretty strong predictive accuracy as the points seem to follow along the perfect predictions dashed line pretty closely.
+
+e) Make a residuals plot.
+
+```{r}
+results <- results %>%
+  mutate(Residuals = Actual - Predicted)
+
+ggplot(results, aes(x = Predicted, y = Residuals)) +
+  geom_point(alpha = 0.6, color = "darkgreen") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Residuals vs Fitted Values",
+    x = "Fitted (Predicted) Values",
+    y = "Residuals"
+  ) +
+  theme_minimal()
+
+```
+
+The residual plots shows that they are not randomly scattered around 0 which would be ideal. So I would not say that the model captures the relationship the best but its not completely far off.
+
+# Question 6
+
+a) First, load the diabetes.csv data set. Look at the data in some useful way. Why is logistic regression appropriate here?
+
+```{r}
+library(tidyverse)
+library(caret)
+library(glmnet)
+diabetes <- read_csv("diabetes.csv")
+glimpse(diabetes)
+
+```
+
+The outcome variable is binary so logistic regression would be appropriate.
+
+b) Scale data and split it 75/25 training/testing. Set seed = 123.
+
+```{r}
+scale <- function(a){ (a - min(a)) / (max(a) - min(a)) }
+
+set.seed(123)
+train_idx <- runif(nrow(diabetes)) < 0.75
+train <- diabetes[train_idx, ]
+test  <- diabetes[!train_idx, ]
+
+train <- train %>% mutate(across(where(is.numeric), scale))
+test  <- test %>% mutate(across(where(is.numeric), scale))
+
+```
+
+c) Fit the model.
+
+```{r}
+model <- glm(Outcome ~ ., data = train, family = binomial)
+summary(model)
+
+```
+
+d) Make predictions on test data. Print a table with the number of true positives, false positives, true negatives, false negatives, and accuracy.
+
+```{r}
+pred_probs <- predict(model, newdata = test, type = "response")
+pred_labels <- ifelse(pred_probs > 0.5, 1, 0)
+
+conf <- table(Predicted = pred_labels, Actual = test$Outcome)
+accuracy <- sum(diag(conf)) / sum(conf)
+
+conf
+accuracy
+
+```
+
+e) Fit a LASSO-regularized logistic regression model. Again, set seed = 123. Which variables are the most important (which ones don't go to zero)? How does the LASSO model affect the accuracy?
+
+```{r}
+library(glmnet)
+library(tidyverse)
+library(caret)
+diabetes$Outcome <- as.factor(diabetes$Outcome)
+
+
+set.seed(123)
+train_index <- createDataPartition(diabetes$Outcome, p = 0.75, list = FALSE)
+train_data <- diabetes[train_index, ]
+test_data <- diabetes[-train_index, ]
+
+
+preproc <- preProcess(train_data[, -ncol(train_data)], method = c("center", "scale"))
+train_scaled <- predict(preproc, train_data[, -ncol(train_data)])
+test_scaled <- predict(preproc, test_data[, -ncol(test_data)])
+
+x_train <- as.matrix(train_scaled)
+y_train <- train_data$Outcome
+x_test <- as.matrix(test_scaled)
+y_test <- test_data$Outcome
+
+lasso_model <- cv.glmnet(
+  x_train,
+  y_train,
+  alpha = 1,                
+  family = "binomial",      
+  type.measure = "class"
+)
+
+
+lasso_model$lambda.min
+coef_lasso <- coef(lasso_model, s = "lambda.min")
+coef_lasso
+
+
+lasso_pred_prob <- predict(lasso_model, newx = x_test, s = "lambda.min", type = "response")
+
+
+
+lasso_pred_class <- ifelse(lasso_pred_prob > 0.5, 1, 0)
+
+conf_matrix <- table(Predicted = lasso_pred_class, Actual = y_test)
+conf_matrix
+
+
+lasso_accuracy <- mean(lasso_pred_class == y_test)
+lasso_accuracy
+```
+
+Pregnancies, Glucose, BMI,BloodPressure, DiabetesPedigreeFunction, and Age are the most important variables since they do not cross or go to zero.LASSO improves model generalization be penalizing complexity and it keeps variables that meaningfully contribute to the prediction, but it can lose a little bit of accuracy.
+
+f) Make a plot of actual vs. predicted values for the LASSO model.
+
+```{r}
+results_lasso <- tibble(
+  Actual = as.numeric(as.character(y_test)),
+  Predicted_Prob = as.numeric(lasso_pred_prob)
+)
+
+ggplot(results_lasso, aes(x = Actual, y = Predicted_Prob)) +
+  geom_jitter(alpha = 0.5, color = "blue") +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE, color = "red") +
+  labs(
+    title = "LASSO Logistic Regression: Actual vs Predicted Probabilities",
+    x = "Actual (0 = No Diabetes, 1 = Diabetes)",
+    y = "Predicted Probability"
+  ) +
+  theme_minimal()
+
+```
